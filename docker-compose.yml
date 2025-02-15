@@ -37,10 +37,10 @@ services:
       LOGS_FILE_PATH: ${LOGS_FILE_PATH:-logs.bin}
       PAGES_FILE_PATH: ${PAGES_FILE_PATH:-pages.bin}
     volumes:
-      - ./logs.bin:/app/logs.bin
-      - ./pages.bin:/app/pages.bin
-      - ./debug.log:/app/debug.log
-      - ./.tokens:/app/.tokens
+      - ./data/logs.bin:/app/logs.bin
+      - ./data/pages.bin:/app/pages.bin
+      - ./data/debug.log:/app/debug.log
+      - ./data/.tokens:/app/.tokens
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
