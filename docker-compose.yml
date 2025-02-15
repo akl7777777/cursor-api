@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   cursor-api:
     build:
@@ -13,31 +11,31 @@ services:
     ports:
       - "${PORT:-3001}:3000"
     environment:
-      - TZ=Asia/Shanghai
-      - PORT=3000
-      - ROUTE_PREFIX=${ROUTE_PREFIX:-}
-      - AUTH_TOKEN=${AUTH_TOKEN:?AUTH_TOKEN is required}
-      - SHARED_TOKEN=${SHARED_TOKEN:-}
-      - TOKEN_LIST_FILE=${TOKEN_LIST_FILE:-.tokens}
-      - ENABLE_SLOW_POOL=${ENABLE_SLOW_POOL:-false}
-      - PASS_ANY_CLAUDE=${PASS_ANY_CLAUDE:-false}
-      - VISION_ABILITY=${VISION_ABILITY:-base64}
-      - USAGE_CHECK=${USAGE_CHECK:-default}
-      - DYNAMIC_KEY=${DYNAMIC_KEY:-false}
-      - KEY_PREFIX=${KEY_PREFIX:-sk-}
-      - DEFAULT_INSTRUCTIONS=${DEFAULT_INSTRUCTIONS:-"Respond in Chinese by default"}
-      - REVERSE_PROXY_HOST=${REVERSE_PROXY_HOST:-}
-      - PROXIES=${PROXIES:-}
-      - REQUEST_BODY_LIMIT_MB=${REQUEST_BODY_LIMIT_MB:-2}
-      - TOKEN_DELIMITER=${TOKEN_DELIMITER:-,}
-      - USE_COMMA_DELIMITER=${USE_COMMA_DELIMITER:-true}
-      - DEBUG=${DEBUG:-false}
-      - DEBUG_LOG_FILE=${DEBUG_LOG_FILE:-debug.log}
-      - REQUEST_LOGS_LIMIT=${REQUEST_LOGS_LIMIT:-100}
-      - SERVICE_TIMEOUT=${SERVICE_TIMEOUT:-30}
-      - INCLUDE_WEB_REFERENCES=${INCLUDE_WEB_REFERENCES:-false}
-      - LOGS_FILE_PATH=${LOGS_FILE_PATH:-logs.bin}
-      - PAGES_FILE_PATH=${PAGES_FILE_PATH:-pages.bin}
+      TZ: Asia/Shanghai
+      PORT: 3000
+      ROUTE_PREFIX: ${ROUTE_PREFIX:-}
+      AUTH_TOKEN: ${AUTH_TOKEN}
+      SHARED_TOKEN: ${SHARED_TOKEN:-}
+      TOKEN_LIST_FILE: ${TOKEN_LIST_FILE:-.tokens}
+      ENABLE_SLOW_POOL: ${ENABLE_SLOW_POOL:-false}
+      PASS_ANY_CLAUDE: ${PASS_ANY_CLAUDE:-false}
+      VISION_ABILITY: ${VISION_ABILITY:-base64}
+      USAGE_CHECK: ${USAGE_CHECK:-default}
+      DYNAMIC_KEY: ${DYNAMIC_KEY:-false}
+      KEY_PREFIX: ${KEY_PREFIX:-sk-}
+      DEFAULT_INSTRUCTIONS: ${DEFAULT_INSTRUCTIONS:-"Respond in Chinese by default"}
+      REVERSE_PROXY_HOST: ${REVERSE_PROXY_HOST:-}
+      PROXIES: ${PROXIES:-}
+      REQUEST_BODY_LIMIT_MB: ${REQUEST_BODY_LIMIT_MB:-2}
+      TOKEN_DELIMITER: ${TOKEN_DELIMITER:-,}
+      USE_COMMA_DELIMITER: ${USE_COMMA_DELIMITER:-true}
+      DEBUG: ${DEBUG:-false}
+      DEBUG_LOG_FILE: ${DEBUG_LOG_FILE:-debug.log}
+      REQUEST_LOGS_LIMIT: ${REQUEST_LOGS_LIMIT:-100}
+      SERVICE_TIMEOUT: ${SERVICE_TIMEOUT:-30}
+      INCLUDE_WEB_REFERENCES: ${INCLUDE_WEB_REFERENCES:-false}
+      LOGS_FILE_PATH: ${LOGS_FILE_PATH:-logs.bin}
+      PAGES_FILE_PATH: ${PAGES_FILE_PATH:-pages.bin}
     volumes:
       - ./logs.bin:/app/logs.bin
       - ./pages.bin:/app/pages.bin
