@@ -9,7 +9,7 @@ services:
     container_name: cursor-api
     restart: unless-stopped
     ports:
-      - "${PORT:-3001}:3000"
+      - "${PORT:-3000}:3000"
     environment:
       TZ: Asia/Shanghai
       PORT: 3000
