@@ -91,17 +91,21 @@ pub fn build_client(auth_token: &str, checksum: &str, is_search: bool) -> Reques
         .header(CONTENT_TYPE, CONTENT_TYPE_CONNECT_PROTO)
         .bearer_auth(auth_token)
         .header("connect-accept-encoding", ENCODINGS)
+        // 添加这行
+        .header("connect-content-encoding", "gzip")
         .header("connect-protocol-version", ONE)
         .header(USER_AGENT, "connect-es/1.6.1")
         .header("x-amzn-trace-id", format!("Root={}", trace_id))
         .header("x-client-key", generate_hash())
         .header("x-cursor-checksum", checksum)
-        .header("x-cursor-client-version", "0.42.5")
+        // 修改版本号
+        .header("x-cursor-client-version", "0.43.6")
         .header("x-cursor-timezone", "Asia/Shanghai")
         .header(HEADER_NAME_GHOST_MODE, TRUE)
         .header("x-request-id", trace_id)
-        .header(CONNECTION, KEEP_ALIVE)
-        .header(TRANSFER_ENCODING, "chunked")
+    // 移除这两行，因为抓包中没有
+    // .header(CONNECTION, KEEP_ALIVE)
+    // .header(TRANSFER_ENCODING, "chunked")
 }
 
 /// 返回预构建的获取 Stripe 账户信息的 Cursor API 客户端
