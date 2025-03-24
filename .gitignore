@@ -16,7 +16,7 @@ node_modules
 /cursor-api
 /cursor-api.exe
 /release
-
+/data
 /*.py
 /logs
 /dev*

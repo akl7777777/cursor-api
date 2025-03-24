@@ -1,6 +1,6 @@
 use reqwest::{Client, Proxy};
-use serde::{Serialize, Serializer};
 use serde::{Deserialize, Deserializer};
+use serde::{Serialize, Serializer};
 // use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 
 use crate::app::constant::COMMA_STRING;

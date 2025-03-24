@@ -9,7 +9,7 @@ pub struct HealthCheckResponse {
     pub uptime: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stats: Option<SystemStats>,
-    pub models: Vec<&'static str>,
+    pub models: Vec<String>,
     pub endpoints: Vec<&'static str>,
 }
 

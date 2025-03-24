@@ -1,6 +1,6 @@
 use crate::{
     app::constant::{COMMA, COMMA_STRING},
-    chat::{config::key_config, constant::AVAILABLE_MODELS},
+    chat::{config::key_config, constant::Models},
 };
 use serde::{Deserialize, Serialize};
 // use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
@@ -10,7 +10,7 @@ pub enum UsageCheck {
     None,
     Default,
     All,
-    Custom(Vec<&'static str>),
+    Custom(Vec<String>),
 }
 
 impl UsageCheck {
@@ -21,10 +21,10 @@ impl UsageCheck {
                 Type::Default | Type::Disabled => Self::None,
                 Type::All => Self::All,
                 Type::Custom => {
-                    let models: Vec<&'static str> = model
+                    let models: Vec<_> = model
                         .model_ids
                         .iter()
-                        .filter_map(|id| AVAILABLE_MODELS.iter().find(|m| m.id == id).map(|m| m.id))
+                        .filter_map(|id| Models::find_id(id))
                         .collect();
                     if models.is_empty() {
                         Self::None
@@ -119,14 +119,11 @@ impl<'de> Deserialize<'de> for UsageCheck {
                     return Ok(UsageCheck::None);
                 }
 
-                let models: Vec<&'static str> = list
+                let models: Vec<_> = list
                     .split(COMMA)
                     .filter_map(|model| {
                         let model = model.trim();
-                        AVAILABLE_MODELS
-                            .iter()
-                            .find(|m| m.id == model)
-                            .map(|m| m.id)
+                        Models::find_id(model)
                     })
                     .collect();
 
@@ -150,14 +147,11 @@ impl UsageCheck {
                 if list.is_empty() {
                     return Self::default();
                 }
-                let models: Vec<&'static str> = list
+                let models: Vec<_> = list
                     .split(COMMA)
                     .filter_map(|model| {
                         let model = model.trim();
-                        AVAILABLE_MODELS
-                            .iter()
-                            .find(|m| m.id == model)
-                            .map(|m| m.id)
+                        Models::find_id(model)
                     })
                     .collect();
 

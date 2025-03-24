@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -80,22 +82,28 @@ pub struct Usage {
 // 模型定义
 #[derive(Serialize, Clone)]
 pub struct Model {
-    pub id: &'static str,
+    pub id: String,
     pub created: &'static i64,
     pub object: &'static str,
     pub owned_by: &'static str,
 }
 
-use super::constant::USAGE_CHECK_MODELS;
+impl PartialEq for Model {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+use super::constant::{Models, USAGE_CHECK_MODELS};
 use crate::app::model::{AppConfig, UsageCheck};
 
 impl Model {
-    pub fn is_usage_check(&self, usage_check: Option<UsageCheck>) -> bool {
+    pub fn is_usage_check(model_id: &String, usage_check: Option<UsageCheck>) -> bool {
         match usage_check.unwrap_or(AppConfig::get_usage_check()) {
             UsageCheck::None => false,
-            UsageCheck::Default => USAGE_CHECK_MODELS.contains(&self.id),
+            UsageCheck::Default => USAGE_CHECK_MODELS.contains(&model_id.as_str()),
             UsageCheck::All => true,
-            UsageCheck::Custom(models) => models.contains(&self.id),
+            UsageCheck::Custom(models) => models.contains(model_id),
         }
     }
 }
@@ -103,5 +111,18 @@ impl Model {
 #[derive(Serialize)]
 pub struct ModelsResponse {
     pub object: &'static str,
-    pub data: &'static [Model],
+    pub data: Arc<Vec<Model>>,
+}
+
+impl ModelsResponse {
+    pub(super) fn new(data: Arc<Vec<Model>>) -> Self {
+        Self {
+            object: "list",
+            data,
+        }
+    }
+
+    pub(super) fn with_default_models() -> Self {
+        Self::new(Models::to_arc())
+    }
 }

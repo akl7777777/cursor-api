@@ -1,15 +1,28 @@
 mod checksum;
-use ::base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use ::base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use checksum::*;
 mod token;
+use prost::Message as _;
 pub use token::*;
 mod base64;
 pub use base64::*;
 
-use super::model::{token::TokenPayload, userinfo::{StripeProfile, TokenProfile, UsageProfile, UserProfile}};
-use crate::app::{
-    constant::{COMMA, FALSE, TRUE},
-    lazy::{TOKEN_DELIMITER, USE_COMMA_DELIMITER},
+use super::model::{
+    token::TokenPayload,
+    userinfo::{StripeProfile, TokenProfile, UsageProfile, UserProfile},
+};
+use crate::{
+    app::{
+        constant::{COMMA, FALSE, TRUE},
+        lazy::{CURSOR_API2_CHAT_MODELS_URL, TOKEN_DELIMITER, USE_COMMA_DELIMITER},
+    },
+    chat::{
+        aiserver::v1::{AvailableModelsRequest, AvailableModelsResponse},
+        constant::{
+            ANTHROPIC, CREATED, CURSOR, DEEPSEEK, GOOGLE, MODEL_OBJECT, OPENAI, UNKNOWN, XAI,
+        },
+        model::Model,
+    },
 };
 
 pub fn parse_bool_from_env(key: &str, default: bool) -> bool {
@@ -122,6 +135,59 @@ pub async fn get_user_profile(auth_token: &str) -> Option<UserProfile> {
     let user_profile = client.send().await.ok()?.json::<UserProfile>().await.ok()?;
 
     Some(user_profile)
+}
+
+pub async fn get_available_models(auth_token: &str, checksum: &str) -> Option<Vec<Model>> {
+    let client =
+        super::client::build_client(auth_token, checksum, &CURSOR_API2_CHAT_MODELS_URL, false);
+    let request = AvailableModelsRequest {
+        is_nightly: true,
+        include_long_context_models: true,
+    };
+    let response = client
+        .body(encode_message(&request, false).unwrap())
+        .send()
+        .await
+        .ok()?
+        .bytes()
+        .await
+        .ok()?;
+    let available_models = AvailableModelsResponse::decode(response.as_ref()).ok()?;
+    Some(
+        available_models
+            .models
+            .into_iter()
+            .map(|model| Model {
+                id: model.name.clone(),
+                created: CREATED,
+                object: MODEL_OBJECT,
+                owned_by: {
+                    let mut chars = model.name.chars();
+                    match chars.next() {
+                        Some('g') => match chars.next() {
+                            Some('p') => OPENAI, // g + p → "gp" (gpt)
+                            Some('e') => GOOGLE, // g + e → "ge" (gemini)
+                            Some('r') => XAI,    // g + r → "ge" (grok)
+                            _ => UNKNOWN,
+                        },
+                        Some('o') => match chars.next() {
+                            // o 开头需要二次判断
+                            Some('1') | Some('3') => OPENAI, // o1/o3 系列
+                            _ => UNKNOWN,
+                        },
+                        Some('c') => match chars.next() {
+                            Some('l') => ANTHROPIC, // c + l → "cl" (claude)
+                            Some('u') => CURSOR,    // c + u → "cu" (cursor)
+                            _ => UNKNOWN,
+                        },
+                        Some('d') if chars.next() == Some('e') => DEEPSEEK, // d + e → "de" (deepseek)
+                        // 其他情况
+                        _ => UNKNOWN,
+                    }
+                },
+            })
+            .collect(),
+    )
 }
 
 pub fn validate_token_and_checksum(auth_token: &str) -> Option<(String, String)> {
@@ -277,5 +343,33 @@ pub fn tokeninfo_to_token(info: &key_config::TokenInfo) -> Option<(String, Strin
     };
 
     // 组合 token
-    Some((format!("{}.{}.{}", HEADER_B64, payload_b64, info.signature), generate_checksum(&device_id, mac_addr.as_deref())))
+    Some((
+        format!("{}.{}.{}", HEADER_B64, payload_b64, info.signature),
+        generate_checksum(&device_id, mac_addr.as_deref()),
+    ))
+}
+
+pub fn encode_message(
+    message: &impl prost::Message,
+    with_gzip: bool,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut encoded = Vec::new();
+    message.encode(&mut encoded)?;
+
+    if !with_gzip {
+        return Ok(encoded);
+    }
+    // 构造 5 字节头部 [0x00, len_be_bytes...]
+    let mut header = Vec::with_capacity(5);
+    header.push(0x00); // 压缩标记位
+
+    // 将长度转换为 u32 大端字节（显式长度检查）
+    let len = u32::try_from(encoded.len()).map_err(|_| "Message length exceeds u32::MAX")?; // 明确错误类型
+    header.extend_from_slice(&len.to_be_bytes());
+
+    // 组合最终数据
+    let mut result = header;
+    result.extend(encoded);
+
+    Ok(result)
 }

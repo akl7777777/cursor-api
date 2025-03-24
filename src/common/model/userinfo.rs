@@ -1,11 +1,11 @@
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum GetUserInfo {
-    Usage(TokenProfile),
+    Usage(Box<TokenProfile>),
     Error { error: String },
 }
 
@@ -51,7 +51,7 @@ pub struct ModelUsage {
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    pub requests_total: Option<u32>,
+    pub total_requests: Option<u32>,
     #[serde(rename(deserialize = "numTokens", serialize = "tokens"))]
     pub num_tokens: u32,
     #[serde(
@@ -74,6 +74,8 @@ pub struct UsageProfile {
     pub standard: ModelUsage,
     #[serde(rename(deserialize = "gpt-4-32k"))]
     pub unknown: ModelUsage,
+    #[serde(rename(deserialize = "startOfMonth"))]
+    pub start_of_month: DateTime<Local>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Archive, RkyvDeserialize, RkyvSerialize)]

@@ -6,28 +6,28 @@ use crate::{
             ROUTE_BASIC_CALIBRATION_PATH, ROUTE_BUILD_KEY_PATH, ROUTE_CONFIG_PATH,
             ROUTE_ENV_EXAMPLE_PATH, ROUTE_GET_CHECKSUM, ROUTE_GET_HASH, ROUTE_GET_TIMESTAMP_HEADER,
             ROUTE_HEALTH_PATH, ROUTE_LOGS_PATH, ROUTE_README_PATH, ROUTE_ROOT_PATH,
-            ROUTE_STATIC_PATH, ROUTE_TOKENS_ADD_PATH, ROUTE_TOKENS_DELETE_PATH,
-            ROUTE_TOKENS_GET_PATH, ROUTE_TOKENS_PATH, ROUTE_TOKENS_UPDATE_PATH,
-            ROUTE_USER_INFO_PATH,
+            ROUTE_STATIC_PATH, ROUTE_TOKEN_TAGS_UPDATE_PATH, ROUTE_TOKENS_ADD_PATH,
+            ROUTE_TOKENS_DELETE_PATH, ROUTE_TOKENS_GET_PATH, ROUTE_TOKENS_PATH,
+            ROUTE_TOKENS_UPDATE_PATH, ROUTE_USER_INFO_PATH,
         },
-        lazy::{get_start_time, AUTH_TOKEN, ROUTE_CHAT_PATH, ROUTE_MODELS_PATH},
+        lazy::{AUTH_TOKEN, ROUTE_CHAT_PATH, ROUTE_MODELS_PATH, get_start_time},
         model::{AppConfig, AppState, PageContent},
     },
-    chat::constant::AVAILABLE_MODELS,
+    chat::constant::Models,
     common::model::{
-        health::{CpuInfo, HealthCheckResponse, MemoryInfo, SystemInfo, SystemStats},
         ApiStatus,
+        health::{CpuInfo, HealthCheckResponse, MemoryInfo, SystemInfo, SystemStats},
     },
 };
 use axum::{
+    Json,
     body::Body,
     extract::State,
     http::{
-        header::{CONTENT_TYPE, LOCATION},
         HeaderMap, StatusCode,
+        header::{CONTENT_TYPE, LOCATION},
     },
     response::{IntoResponse, Response},
-    Json,
 };
 use chrono::Local;
 use reqwest::header::AUTHORIZATION;
@@ -44,11 +44,11 @@ pub async fn handle_root() -> impl IntoResponse {
             .unwrap(),
         PageContent::Text(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-            .body(Body::from(content.clone()))
+            .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(Body::from(content.clone()))
+            .body(Body::from(content))
             .unwrap(),
     }
 }
@@ -65,7 +65,7 @@ pub async fn handle_health(
         .get(AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix(AUTHORIZATION_BEARER_PREFIX))
-        .map_or(false, |token| token == AUTH_TOKEN.as_str())
+        .is_some_and(|token| token == AUTH_TOKEN.as_str())
     {
         // 只有在需要系统信息时才创建实例
         let mut sys = System::new_with_specifics(
@@ -93,8 +93,8 @@ pub async fn handle_health(
 
         Some(SystemStats {
             started: start_time.to_string(),
-            total_requests: state.total_requests,
-            active_requests: state.active_requests,
+            total_requests: state.request_manager.total_requests,
+            active_requests: state.request_manager.active_requests,
             system: SystemInfo {
                 memory: MemoryInfo {
                     rss: memory, // 物理内存使用量(字节)
@@ -113,7 +113,7 @@ pub async fn handle_health(
         version: PKG_VERSION,
         uptime,
         stats,
-        models: AVAILABLE_MODELS.iter().map(|m| m.id).collect::<Vec<_>>(),
+        models: Models::ids(),
         endpoints: vec![
             ROUTE_CHAT_PATH.as_str(),
             ROUTE_MODELS_PATH.as_str(),
@@ -122,6 +122,7 @@ pub async fn handle_health(
             ROUTE_TOKENS_UPDATE_PATH,
             ROUTE_TOKENS_ADD_PATH,
             ROUTE_TOKENS_DELETE_PATH,
+            ROUTE_TOKEN_TAGS_UPDATE_PATH,
             ROUTE_LOGS_PATH,
             ROUTE_ENV_EXAMPLE_PATH,
             ROUTE_CONFIG_PATH,

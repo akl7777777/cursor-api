@@ -25,10 +25,10 @@ impl ChatError {
         };
 
         ErrorResponse {
-          status: super::ApiStatus::Error,
-          code: None,
-          error: Some(error.to_string()),
-          message: Some(message),
+            status: super::ApiStatus::Error,
+            code: None,
+            error: Some(error.to_string()),
+            message: Some(message),
         }
     }
 }

@@ -1,10 +1,10 @@
 use crate::chat::{
-    aiserver::v1::StreamChatResponse,
+    aiserver::v1::{StreamChatResponse, WebReference},
     error::{ChatError, StreamError},
 };
 use flate2::read::GzDecoder;
 use prost::Message;
-use std::{collections::BTreeMap, io::Read};
+use std::io::Read;
 
 // 解压gzip数据
 fn decompress_gzip(data: &[u8]) -> Option<Vec<u8>> {
@@ -24,17 +24,23 @@ pub trait ToMarkdown {
     fn to_markdown(&self) -> String;
 }
 
-impl ToMarkdown for BTreeMap<String, String> {
+impl ToMarkdown for Vec<WebReference> {
     fn to_markdown(&self) -> String {
         if self.is_empty() {
             return String::new();
         }
 
         let mut result = String::from("WebReferences:\n");
-        for (i, (url, title)) in self.iter().enumerate() {
-            result.push_str(&format!("{}. [{}]({})\n", i + 1, title, url));
+        for (i, web_ref) in self.iter().enumerate() {
+            result.push_str(&format!(
+                "{}. [{}]({})<{}>\n",
+                i + 1,
+                web_ref.title,
+                web_ref.url,
+                web_ref.chunk
+            ));
         }
-        result.push_str("\n");
+        result.push('\n');
         result
     }
 }
@@ -44,7 +50,7 @@ pub enum StreamMessage {
     // 调试
     Debug(String),
     // 网络引用
-    WebReference(BTreeMap<String, String>),
+    WebReference(Vec<WebReference>),
     // 内容开始标志
     ContentStart,
     // 消息内容
@@ -98,11 +104,15 @@ impl StreamDecoder {
         self.first_result_ready
     }
 
-    pub fn decode(&mut self, data: &[u8], convert_web_ref: bool) -> Result<Vec<StreamMessage>, StreamError> {
+    pub fn decode(
+        &mut self,
+        data: &[u8],
+        convert_web_ref: bool,
+    ) -> Result<Vec<StreamMessage>, StreamError> {
         self.buffer.extend_from_slice(data);
 
         if self.buffer.len() < 5 {
-            if self.buffer.len() == 0 {
+            if self.buffer.is_empty() {
                 return Err(StreamError::EmptyStream);
             }
             crate::debug_println!("数据长度小于5字节，当前数据: {}", hex::encode(&self.buffer));
@@ -133,15 +143,12 @@ impl StreamDecoder {
 
             let msg_data = &self.buffer[offset + 5..offset + 5 + msg_len];
 
-            match self.process_message(msg_type, msg_data)? {
-                Some(msg) => {
-                    if convert_web_ref {
-                        messages.push(msg.convert_web_ref_to_content());
-                    } else {
-                        messages.push(msg);
-                    }
+            if let Some(msg) = self.process_message(msg_type, msg_data)? {
+                if convert_web_ref {
+                    messages.push(msg.convert_web_ref_to_content());
+                } else {
+                    messages.push(msg);
                 }
-                _ => {}
             }
 
             offset += 5 + msg_len;
@@ -157,7 +164,8 @@ impl StreamDecoder {
             }
         }
         if !self.first_result_ready {
-            self.first_result_ready = self.first_result.is_some() && self.buffer.is_empty() && !self.first_result_taken;
+            self.first_result_ready =
+                self.first_result.is_some() && self.buffer.is_empty() && !self.first_result_taken;
         }
         Ok(messages)
     }
@@ -182,17 +190,13 @@ impl StreamDecoder {
 
     fn handle_text_message(&self, msg_data: &[u8]) -> Result<Option<StreamMessage>, StreamError> {
         if let Ok(response) = StreamChatResponse::decode(msg_data) {
-            // crate::debug_println!("[text] StreamChatResponse [hex: {}]: {:?}", hex::encode(msg_data), response);
+            // println!("[text] StreamChatResponse [hex: {}]: {:?}", hex::encode(msg_data), response);
             if !response.text.is_empty() {
                 Ok(Some(StreamMessage::Content(response.text)))
             } else if let Some(filled_prompt) = response.filled_prompt {
                 Ok(Some(StreamMessage::Debug(filled_prompt)))
             } else if let Some(web_citation) = response.web_citation {
-                let mut refs = BTreeMap::new();
-                for reference in web_citation.references {
-                    refs.insert(reference.url, reference.title);
-                }
-                Ok(Some(StreamMessage::WebReference(refs)))
+                Ok(Some(StreamMessage::WebReference(web_citation.references)))
             } else {
                 Ok(None)
             }
@@ -204,17 +208,13 @@ impl StreamDecoder {
     fn handle_gzip_message(&self, msg_data: &[u8]) -> Result<Option<StreamMessage>, StreamError> {
         if let Some(text) = decompress_gzip(msg_data) {
             if let Ok(response) = StreamChatResponse::decode(&text[..]) {
-                // crate::debug_println!("[gzip] StreamChatResponse [hex: {}]: {:?}", hex::encode(msg_data), response);
+                // println!("[gzip] StreamChatResponse [hex: {}]: {:?}", hex::encode(msg_data), response);
                 if !response.text.is_empty() {
                     Ok(Some(StreamMessage::Content(response.text)))
                 } else if let Some(filled_prompt) = response.filled_prompt {
                     Ok(Some(StreamMessage::Debug(filled_prompt)))
                 } else if let Some(web_citation) = response.web_citation {
-                    let mut refs = BTreeMap::new();
-                    for reference in web_citation.references {
-                        refs.insert(reference.url, reference.title);
-                    }
-                    Ok(Some(StreamMessage::WebReference(refs)))
+                    Ok(Some(StreamMessage::WebReference(web_citation.references)))
                 } else {
                     Ok(None)
                 }
@@ -231,7 +231,7 @@ impl StreamDecoder {
             return Ok(Some(StreamMessage::StreamEnd));
         }
         if let Ok(text) = String::from_utf8(msg_data.to_vec()) {
-            // println!("JSON消息: {}", text);
+            // println!("[text] JSON消息 [hex: {}]: {}", hex::encode(msg_data), text);
             if let Ok(error) = serde_json::from_str::<ChatError>(&text) {
                 return Err(StreamError::ChatError(error));
             }
@@ -248,7 +248,7 @@ impl StreamDecoder {
                 return Ok(Some(StreamMessage::StreamEnd));
             }
             if let Ok(text) = String::from_utf8(text) {
-                // println!("JSON消息: {}", text);
+                // println!("[gzip] JSON消息 [hex: {}]: {}", hex::encode(msg_data), text);
                 if let Ok(error) = serde_json::from_str::<ChatError>(&text) {
                     return Err(StreamError::ChatError(error));
                 }
@@ -293,8 +293,11 @@ mod tests {
                         }
                         StreamMessage::WebReference(refs) => {
                             println!("网页引用:");
-                            for (i, (url, title)) in refs.iter().enumerate() {
-                                println!("{}. {} - {}", i, url, title);
+                            for (i, web_ref) in refs.iter().enumerate() {
+                                println!(
+                                    "{}. {} - {} - {}",
+                                    i, web_ref.url, web_ref.title, web_ref.chunk
+                                );
                             }
                         }
                         StreamMessage::Debug(prompt) => {
@@ -375,8 +378,11 @@ mod tests {
                             }
                             StreamMessage::WebReference(refs) => {
                                 println!("网页引用 [hex: {}]:", hex_str);
-                                for (i, (url, title)) in refs.iter().enumerate() {
-                                    println!("{}. {} - {}", i, url, title);
+                                for (i, web_ref) in refs.iter().enumerate() {
+                                    println!(
+                                        "{}. {} - {} - {}",
+                                        i, web_ref.url, web_ref.title, web_ref.chunk
+                                    );
                                 }
                             }
                             StreamMessage::Debug(prompt) => {

@@ -469,7 +469,10 @@
       }
 
       const data = await makeAuthenticatedRequest('/tokens/add', {
-        body: JSON.stringify(tokenList)
+        body: JSON.stringify({
+          tokens: tokenList,
+          tags: []
+        })
       });
 
       if (data) {

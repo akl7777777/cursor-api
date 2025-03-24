@@ -1,9 +1,9 @@
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use rand::Rng;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use rand::Rng as _;
 use sha2::{Digest, Sha256};
 
 pub fn generate_hash() -> String {
-    let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+    let random_bytes = rand::rng().random::<[u8; 32]>();
     let mut hasher = Sha256::new();
     hasher.update(random_bytes);
     hex::encode(hasher.finalize())

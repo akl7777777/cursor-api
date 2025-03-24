@@ -1,6 +1,6 @@
+pub mod config;
 pub mod error;
 pub mod health;
-pub mod config;
 pub mod token;
 pub mod userinfo;
 
@@ -16,8 +16,8 @@ pub enum ApiStatus {
     Success,
     #[serde(rename = "error")]
     Error,
-    #[serde(rename = "failed")]
-    Failed,
+    #[serde(rename = "failure")]
+    Failure,
 }
 
 // #[derive(Serialize)]

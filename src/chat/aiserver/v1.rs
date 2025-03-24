@@ -1,4 +1,5 @@
-include!(concat!(env!("OUT_DIR"), "/aiserver.v1.rs"));
+// include!(concat!(env!("OUT_DIR"), "/aiserver.v1.rs"));
+include!("v1/aiserver.v1.rs");
 use error_details::Error;
 
 impl ErrorDetails {
@@ -7,6 +8,7 @@ impl ErrorDetails {
             Ok(error) => match error {
                 Error::Unspecified => 500,
                 Error::BadApiKey
+                | Error::BadUserApiKey
                 | Error::InvalidAuthId
                 | Error::AuthTokenNotFound
                 | Error::AuthTokenExpired
@@ -33,7 +35,9 @@ impl ErrorDetails {
                 | Error::BadModelName
                 | Error::SlashEditFileTooLong
                 | Error::FileUnsupported
-                | Error::ClaudeImageTooLarge => 400,
+                | Error::ClaudeImageTooLarge
+                | Error::ConversationTooLong => 400,
+                Error::Timeout => 504,
                 Error::Deprecated
                 | Error::FreeUserUsageLimit
                 | Error::ProUserUsageLimit

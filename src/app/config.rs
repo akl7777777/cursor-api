@@ -1,11 +1,11 @@
 use super::{constant::AUTHORIZATION_BEARER_PREFIX, lazy::AUTH_TOKEN, model::AppConfig};
 use crate::common::model::{
-    config::{ConfigData, ConfigUpdateRequest},
     ApiStatus, ErrorResponse, NormalResponse,
+    config::{ConfigData, ConfigUpdateRequest},
 };
 use axum::{
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     Json,
+    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
 };
 
 // 定义处理更新操作的宏
@@ -41,7 +41,7 @@ pub async fn handle_config_update(
         .ok_or((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                status: ApiStatus::Failed,
+                status: ApiStatus::Failure,
                 code: Some(401),
                 error: Some("未提供认证令牌".to_string()),
                 message: None,
@@ -52,7 +52,7 @@ pub async fn handle_config_update(
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                status: ApiStatus::Failed,
+                status: ApiStatus::Failure,
                 code: Some(401),
                 error: Some("无效的认证令牌".to_string()),
                 message: None,
@@ -85,7 +85,7 @@ pub async fn handle_config_update(
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            status: ApiStatus::Failed,
+                            status: ApiStatus::Failure,
                             code: Some(500),
                             error: Some(format!("更新页面内容失败: {}", e)),
                             message: None,
@@ -119,7 +119,7 @@ pub async fn handle_config_update(
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
-                            status: ApiStatus::Failed,
+                            status: ApiStatus::Failure,
                             code: Some(500),
                             error: Some(format!("重置页面内容失败: {}", e)),
                             message: None,
@@ -149,7 +149,7 @@ pub async fn handle_config_update(
         _ => Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                status: ApiStatus::Failed,
+                status: ApiStatus::Failure,
                 code: Some(400),
                 error: Some("无效的操作类型".to_string()),
                 message: None,

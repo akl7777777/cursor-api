@@ -1,10 +1,13 @@
 use crate::{
     chat::constant::ERR_NODATA,
-    common::{model::userinfo::GetUserInfo, utils::{extract_token, get_token_profile}},
+    common::{
+        model::userinfo::GetUserInfo,
+        utils::{extract_token, get_token_profile},
+    },
 };
 use axum::Json;
 
-use super::tokens::TokenRequest;
+use super::token::TokenRequest;
 
 pub async fn handle_user_info(Json(request): Json<TokenRequest>) -> Json<GetUserInfo> {
     let auth_token = match request.token {
@@ -12,7 +15,7 @@ pub async fn handle_user_info(Json(request): Json<TokenRequest>) -> Json<GetUser
         None => {
             return Json(GetUserInfo::Error {
                 error: ERR_NODATA.to_string(),
-            })
+            });
         }
     };
 
@@ -21,12 +24,12 @@ pub async fn handle_user_info(Json(request): Json<TokenRequest>) -> Json<GetUser
         None => {
             return Json(GetUserInfo::Error {
                 error: ERR_NODATA.to_string(),
-            })
+            });
         }
     };
 
     match get_token_profile(&token).await {
-        Some(usage) => Json(GetUserInfo::Usage(usage)),
+        Some(usage) => Json(GetUserInfo::Usage(Box::new(usage))),
         None => Json(GetUserInfo::Error {
             error: ERR_NODATA.to_string(),
         }),

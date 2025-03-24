@@ -1,6 +1,6 @@
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use image::guess_format;
-use prost::Message as _;
+use rand::Rng as _;
 use reqwest::Client;
 use uuid::Uuid;
 
@@ -10,16 +10,78 @@ use crate::{
         lazy::DEFAULT_INSTRUCTIONS,
         model::{AppConfig, VisionAbility},
     },
-    common::client::HTTP_CLIENT,
+    common::{client::HTTP_CLIENT, utils::encode_message},
 };
 
 use super::{
     aiserver::v1::{
-        conversation_message, image_proto, AzureState, ChatExternalLink, ConversationMessage, ExplicitContext, GetChatRequest, ImageProto, ModelDetails
+        AzureState, ChatExternalLink, ConversationMessage, ExplicitContext, GetChatRequest,
+        ImageProto, ModelDetails, WebReference, conversation_message, image_proto,
     },
     constant::{ERR_UNSUPPORTED_GIF, ERR_UNSUPPORTED_IMAGE_FORMAT, LONG_CONTEXT_MODELS},
     model::{Message, MessageContent, Role},
 };
+
+fn parse_web_references(text: &str) -> Vec<WebReference> {
+    let mut web_refs = Vec::new();
+    let lines = text.lines().skip(1); // 跳过 "WebReferences:" 行
+
+    for line in lines {
+        let line = line.trim();
+        if line.is_empty() {
+            break;
+        }
+
+        // 跳过序号和空格
+        let mut chars = line.chars();
+        for c in chars.by_ref() {
+            if c == '.' {
+                break;
+            }
+        }
+        let remaining = chars.as_str().trim_start();
+
+        // 解析 [title](url) 部分
+        if !remaining.starts_with('[') {
+            continue;
+        }
+
+        let mut title = String::new();
+        let mut url = String::new();
+        let mut chunk = String::new();
+        let mut current = &mut title;
+        let mut state = 0; // 0: title, 1: url, 2: chunk
+
+        let mut chars = remaining.chars();
+        chars.next(); // 跳过 '['
+
+        while let Some(c) = chars.next() {
+            match (state, c) {
+                (0, ']') => {
+                    state = 1;
+                    if chars.next() != Some('(') {
+                        break;
+                    }
+                    current = &mut url;
+                }
+                (1, ')') => {
+                    state = 2;
+                    if chars.next() == Some('<') {
+                        current = &mut chunk;
+                    } else {
+                        break;
+                    }
+                }
+                (2, '>') => break,
+                (_, c) => current.push(c),
+            }
+        }
+
+        web_refs.push(WebReference { title, url, chunk });
+    }
+
+    web_refs
+}
 
 async fn process_chat_inputs(
     inputs: Vec<Message>,
@@ -96,6 +158,17 @@ async fn process_chat_inputs(
                 is_agentic: false,
                 file_diff_trajectories: vec![],
                 conversation_summary: None,
+                existed_subsequent_terminal_command: false,
+                existed_previous_terminal_command: false,
+                docs_references: vec![],
+                web_references: vec![],
+                git_context: None,
+                attached_folders_list_dir_results: vec![],
+                cached_conversation_summary: None,
+                human_changes: vec![],
+                attached_human_changes: false,
+                summarized_composers: vec![],
+                cursor_rules: vec![],
             }],
             vec![],
         );
@@ -119,7 +192,7 @@ async fn process_chat_inputs(
     // 如果第一条是 assistant，插入空的 user 消息
     if chat_inputs
         .first()
-        .map_or(false, |input| input.role == Role::Assistant)
+        .is_some_and(|input| input.role == Role::Assistant)
     {
         chat_inputs.insert(
             0,
@@ -153,7 +226,7 @@ async fn process_chat_inputs(
     // 确保最后一条是 user
     if chat_inputs
         .last()
-        .map_or(false, |input| input.role == Role::Assistant)
+        .is_some_and(|input| input.role == Role::Assistant)
     {
         chat_inputs.push(Message {
             role: Role::User,
@@ -201,6 +274,21 @@ async fn process_chat_inputs(
             }
         };
 
+        let (text, web_references) =
+            if input.role == Role::Assistant && text.starts_with("WebReferences:") {
+                if let Some(pos) = text.find("\n\n") {
+                    let (web_refs_text, content_text) = text.split_at(pos);
+                    (
+                        content_text[2..].to_string(), // 跳过 "\n\n"
+                        parse_web_references(web_refs_text),
+                    )
+                } else {
+                    (text, vec![])
+                }
+            } else {
+                (text, vec![])
+            };
+
         messages.push(ConversationMessage {
             text,
             r#type: if input.role == Role::User {
@@ -238,6 +326,17 @@ async fn process_chat_inputs(
             is_agentic: false,
             file_diff_trajectories: vec![],
             conversation_summary: None,
+            existed_subsequent_terminal_command: false,
+            existed_previous_terminal_command: false,
+            docs_references: vec![],
+            web_references,
+            git_context: None,
+            attached_folders_list_dir_results: vec![],
+            cached_conversation_summary: None,
+            human_changes: vec![],
+            attached_human_changes: false,
+            summarized_composers: vec![],
+            cursor_rules: vec![],
         });
     }
 
@@ -246,7 +345,7 @@ async fn process_chat_inputs(
         if last_msg.r#type == conversation_message::MessageType::Human as i32 {
             let text = &last_msg.text;
             let mut chars = text.chars().peekable();
-            
+
             while let Some(c) = chars.next() {
                 if c == '@' {
                     let mut url = String::new();
@@ -387,13 +486,7 @@ pub async fn encode_chat_message(
     is_search: bool,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     // 在进入异步操作前获取并释放锁
-    let enable_slow_pool = {
-        if enable_slow_pool {
-            Some(true)
-        } else {
-            None
-        }
-    };
+    let enable_slow_pool = { if enable_slow_pool { Some(true) } else { None } };
 
     let (instructions, messages, urls) = process_chat_inputs(inputs, disable_vision).await;
 
@@ -401,19 +494,24 @@ pub async fn encode_chat_message(
         Some(ExplicitContext {
             context: instructions,
             repo_context: None,
+            rules: vec![],
         })
     } else {
         None
     };
 
-    let base_uuid = rand::random::<u16>();
-    let external_links = urls.into_iter().enumerate().map(|(i, url)| {
-        let uuid = base_uuid.wrapping_add(i as u16);
-        ChatExternalLink {
-            url,
-            uuid: uuid.to_string(),
-        }
-    }).collect();
+    let base_uuid = rand::rng().random::<u16>();
+    let external_links = urls
+        .into_iter()
+        .enumerate()
+        .map(|(i, url)| {
+            let uuid = base_uuid.wrapping_add(i as u16);
+            ChatExternalLink {
+                url,
+                uuid: uuid.to_string(),
+            }
+        })
+        .collect();
 
     let chat = GetChatRequest {
         current_file: None,
@@ -461,13 +559,9 @@ pub async fn encode_chat_message(
         is_composer: None,
         runnable_code_blocks: Some(false),
         should_cache: Some(false),
+        allow_model_fallbacks: None,
+        number_of_times_shown_fallback_model_warning: None,
     };
 
-    let mut encoded = Vec::new();
-    chat.encode(&mut encoded)?;
-
-    let len_prefix = format!("{:010x}", encoded.len()).to_uppercase();
-    let content = hex::encode_upper(&encoded);
-
-    Ok(hex::decode(len_prefix + &content)?)
+    encode_message(&chat, true)
 }

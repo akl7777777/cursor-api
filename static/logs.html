@@ -376,6 +376,23 @@
       background: var(--error-color);
       color: white;
     }
+
+    /* 图表样式 */
+    .chart-container {
+      background: var(--card-background);
+      padding: 20px;
+      border-radius: var(--border-radius);
+      margin-bottom: var(--spacing);
+      border: 1px solid var(--border-color);
+      height: 300px;
+    }
+
+    @media (max-width: 768px) {
+      .chart-container {
+        height: 200px;
+        padding: 16px;
+      }
+    }
   </style>
 </head>
 
@@ -416,6 +433,11 @@
         <h4>最后更新</h4>
         <div id="lastUpdate" class="stat-value">-</div>
       </div>
+    </div>
+
+    <!-- 添加图表容器 -->
+    <div class="chart-container">
+      <canvas id="requestsChart"></canvas>
     </div>
 
     <div class="table-container">
@@ -529,8 +551,12 @@
     </div>
   </div>
 
+  <!-- 添加 Chart.js 库 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.js" integrity="sha512-0im+NZpDrlsC+p6iSc13cqlMNPqdT6e0hUF8NAaxdaGOmPuV9DdVpWYOCHHrMQNVDb2TByQoDbHx34MT6g16ZA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
   <script>
     let refreshInterval;
+    let requestsChart;
 
     function updateStats(data) {
       document.getElementById('totalRequests').textContent = data.total || 0;
@@ -676,9 +702,91 @@
       return rows.map(([label, value]) => `<div class="tooltip-info-row"><span class="label">${label}:</span><span class="value">${value}</span></div>`).join('');
     }
 
+    function initChart() {
+      const ctx = document.getElementById('requestsChart').getContext('2d');
+      requestsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '每小时请求数',
+            data: [],
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1,
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                stepSize: 10
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: '24小时请求统计'
+            }
+          }
+        }
+      });
+    }
+
+    // 更新图表数据
+    function updateChart(data) {
+      if (!requestsChart) {
+        initChart();
+      }
+
+      // 按小时统计请求数量
+      const hourlyStats = new Map();
+      const now = new Date();
+      const past24Hours = new Date(now - 24 * 60 * 60 * 1000);
+
+      // 初始化24小时的时间段
+      for (let i = 0; i < 24; i++) {
+        const hour = new Date(now - i * 60 * 60 * 1000);
+        const hourKey = hour.toLocaleString('zh-CN', {
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric'
+        });
+        hourlyStats.set(hourKey, 0);
+      }
+
+      // 统计每小时的请求数
+      data.logs.forEach(log => {
+        const logTime = new Date(log.timestamp);
+        if (logTime >= past24Hours) {
+          const hourKey = logTime.toLocaleString('zh-CN', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric'
+          });
+          if (hourlyStats.has(hourKey)) {
+            hourlyStats.set(hourKey, hourlyStats.get(hourKey) + 1);
+          }
+        }
+      });
+
+      // 转换为图表数据
+      const sortedHours = Array.from(hourlyStats.keys()).reverse();
+      const counts = sortedHours.map(hour => hourlyStats.get(hour));
+
+      requestsChart.data.labels = sortedHours;
+      requestsChart.data.datasets[0].data = counts;
+      requestsChart.update();
+    }
+
     function updateTable(data) {
       const tbody = document.getElementById('logsBody');
       updateStats(data);
+      updateChart(data);
 
       tbody.innerHTML = data.logs.map(log => `<tr><td>${log.id}</td><td>${new Date(log.timestamp).toLocaleString()}</td><td>${log.model}</td><td><div class="token-info-tooltip"><button class="info-button" onclick='showTokenModal(${JSON.stringify(log.token_info)})'>查看详情<div class="tooltip-content">${formatSimpleTokenInfo(log.token_info)}</div></button></div></td><td>${log.prompt ? `<div class="token-info-tooltip prompt-preview"><button class="info-button" onclick="showPromptModal(decodeURIComponent('${encodeURIComponent(log.prompt).replace(/'/g, "\\'")}'))">查看对话<div class="tooltip-content">${formatPromptPreview(log.prompt)}</div></button></div>` : '-'}</td><td>${formatTiming(log.timing.total, log.timing.first)}</td><td>${log.stream ? '是' : '否'}</td><td>${log.status}</td><td>${log.error || '-'}</td></tr>`).join('');
     }

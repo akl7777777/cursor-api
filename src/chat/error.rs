@@ -1,6 +1,6 @@
 use super::aiserver::v1::ErrorDetails;
 use crate::common::model::{ApiStatus, ErrorResponse as CommonErrorResponse};
-use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use prost::Message as _;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -42,7 +42,7 @@ pub struct ErrorDetail {
 // }
 
 impl ChatError {
-    pub fn to_error_response(self) -> ErrorResponse {
+    pub fn into_error_response(self) -> ErrorResponse {
         if self.error.details.is_empty() {
             return ErrorResponse {
                 status: 500,
@@ -108,7 +108,7 @@ impl ErrorResponse {
         )
     }
 
-    pub fn to_common(self) -> CommonErrorResponse {
+    pub fn into_common(self) -> CommonErrorResponse {
         CommonErrorResponse {
             status: ApiStatus::Error,
             code: Some(self.status),

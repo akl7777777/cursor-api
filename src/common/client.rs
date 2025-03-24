@@ -1,17 +1,21 @@
 use super::utils::generate_hash;
-use crate::{app::{
-    constant::{
-        CONTENT_TYPE_CONNECT_PROTO, CURSOR_API2_HOST, CURSOR_HOST, CURSOR_SETTINGS_URL,
-        HEADER_NAME_GHOST_MODE, TRUE,
+use crate::{
+    AppConfig,
+    app::{
+        constant::{
+            CONTENT_TYPE_CONNECT_PROTO, CONTENT_TYPE_PROTO, CURSOR_API2_HOST, CURSOR_HOST,
+            CURSOR_SETTINGS_URL, HEADER_NAME_GHOST_MODE, TRUE,
+        },
+        lazy::{
+            CURSOR_API2_STRIPE_URL, CURSOR_USAGE_API_URL, CURSOR_USER_API_URL, REVERSE_PROXY_HOST,
+            USE_REVERSE_PROXY,
+        },
     },
-    lazy::{
-        CURSOR_API2_CHAT_URL, CURSOR_API2_CHAT_WEB_URL, CURSOR_API2_STRIPE_URL, CURSOR_USAGE_API_URL, CURSOR_USER_API_URL, REVERSE_PROXY_HOST, USE_REVERSE_PROXY
-    },
-}, AppConfig};
+};
 use reqwest::header::{
-        ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CACHE_CONTROL, CONNECTION, CONTENT_TYPE, COOKIE,
-        DNT, HOST, ORIGIN, PRAGMA, REFERER, TE, TRANSFER_ENCODING, USER_AGENT,
-    };
+    ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CACHE_CONTROL, CONNECTION, CONTENT_TYPE, COOKIE, DNT,
+    HOST, ORIGIN, PRAGMA, REFERER, TE, TRANSFER_ENCODING, USER_AGENT,
+};
 use reqwest::{Client, RequestBuilder};
 use std::sync::LazyLock;
 use uuid::Uuid;
@@ -35,7 +39,10 @@ def_const!(VALUE_LANGUAGE, "zh-CN");
 def_const!(EMPTY, "empty");
 def_const!(CORS, "cors");
 def_const!(NO_CACHE, "no-cache");
-def_const!(UA_WIN, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+def_const!(
+    UA_WIN,
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+);
 def_const!(SAME_ORIGIN, "same-origin");
 def_const!(KEEP_ALIVE, "keep-alive");
 def_const!(TRAILERS, "trailers");
@@ -66,13 +73,13 @@ pub fn rebuild_http_client() {
 /// # 返回
 ///
 /// * `reqwest::RequestBuilder` - 配置好的请求构建器
-pub fn build_client(auth_token: &str, checksum: &str, is_search: bool) -> RequestBuilder {
+pub fn build_client(
+    auth_token: &str,
+    checksum: &str,
+    url: &str,
+    is_stream: bool,
+) -> RequestBuilder {
     let trace_id = Uuid::new_v4().to_string();
-    let url = if is_search {
-        &*CURSOR_API2_CHAT_WEB_URL
-    } else {
-        &*CURSOR_API2_CHAT_URL
-    };
 
     let client = if *USE_REVERSE_PROXY {
         HTTP_CLIENT
@@ -81,14 +88,18 @@ pub fn build_client(auth_token: &str, checksum: &str, is_search: bool) -> Reques
             .header(HOST, &*REVERSE_PROXY_HOST)
             .header(PROXY_HOST, CURSOR_API2_HOST)
     } else {
-        HTTP_CLIENT
-            .read()
-            .post(url)
-            .header(HOST, CURSOR_API2_HOST)
+        HTTP_CLIENT.read().post(url).header(HOST, CURSOR_API2_HOST)
     };
 
     client
-        .header(CONTENT_TYPE, CONTENT_TYPE_CONNECT_PROTO)
+        .header(
+            CONTENT_TYPE,
+            if is_stream {
+                CONTENT_TYPE_CONNECT_PROTO
+            } else {
+                CONTENT_TYPE_PROTO
+            },
+        )
         .bearer_auth(auth_token)
         .header("connect-accept-encoding", ENCODINGS)
         // 添加这行

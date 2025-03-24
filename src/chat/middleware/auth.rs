@@ -1,7 +1,7 @@
 use crate::app::{constant::AUTHORIZATION_BEARER_PREFIX, lazy::AUTH_TOKEN};
 use axum::{
     body::Body,
-    http::{header::AUTHORIZATION, Request, StatusCode},
+    http::{Request, StatusCode, header::AUTHORIZATION},
     middleware::Next,
     response::Response,
 };

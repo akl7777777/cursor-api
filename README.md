@@ -59,17 +59,18 @@ gpt-4o-128k
 gemini-1.5-flash-500k
 claude-3-haiku-200k
 claude-3-5-sonnet-200k
-claude-3-5-sonnet-20241022
 gpt-4o-mini
 o1-mini
 o1-preview
 o1
 claude-3.5-haiku
-gemini-exp-1206
+gemini-2.0-pro-exp
 gemini-2.0-flash-thinking-exp
-gemini-2.0-flash-exp
+gemini-2.0-flash
 deepseek-v3
 deepseek-r1
+o3-mini
+grok-2
 ```
 
 ## 接口说明
@@ -148,6 +149,32 @@ data: {"id":"string","object":"chat.completion.chunk","created":number,"model":"
 data: [DONE]
 ```
 
+### 获取模型列表
+
+* 接口地址: `/v1/models`
+* 请求方法: GET
+* 认证方式: Bearer Token
+
+#### 响应格式
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "string",
+      "object": "model",
+      "created": number,
+      "owned_by": "string"
+    }
+  ]
+}
+```
+
+#### 更新模型列表说明
+
+每次携带Token时都会拉取最新的模型列表，与上次更新需距离至少30分钟。
+
 ### Token管理接口
 
 #### 简易Token信息管理页面
@@ -194,7 +221,8 @@ data: [DONE]
             "tokens": number,
             "max_requests": number,
             "max_tokens": number
-          }
+          },
+          "start_of_month": "string"
         },
         "user": {
           "email": "string",
@@ -260,12 +288,15 @@ data: [DONE]
 * 请求格式:
 
 ```json
-[
-  {
-    "token": "string",
-    "checksum": "string"  // 可选，如果不提供将自动生成
-  }
-]
+{
+  "tokens": [
+    {
+      "token": "string",
+      "checksum": "string"  // 可选，如果不提供将自动生成
+    }
+  ],
+  "tags": ["string"]
+}
 ```
 
 * 响应格式:
@@ -307,6 +338,29 @@ data: [DONE]
   - updated_tokens: 返回更新后的token列表
   - failed_tokens: 返回未找到的token列表
   - detailed: 返回完整信息（包括updated_tokens和failed_tokens）
+
+#### 更新Tokens标签
+
+* 接口地址: `/tokens/tags/update`
+* 请求方法: POST
+* 认证方式: Bearer Token
+* 请求格式:
+
+```json
+{
+  "tokens": ["string"],
+  "tags": ["string"]
+}
+```
+
+* 响应格式:
+
+```json
+{
+  "status": "success",
+  "message": "string"  // "标签更新成功"
+}
+```
 
 #### 构建API Key
 
@@ -354,7 +408,7 @@ data: [DONE]
 |------|------|
 | 提取关键信息，生成更短的密钥 | 可能存在版本兼容性问题 |
 | 支持携带自定义配置 | 增加了程序复杂度 |
-| 采用非常规编码方式，提升安全性 | |
+| 采用非常规编码方式，提升安全性 | 项目是开源的，安全性的提升相当于没有 |
 | 更容易验证Key的合法性 | |
 | 取消预校验带来轻微性能提升 | |
 
@@ -469,26 +523,6 @@ data: [DONE]
 * 功能: 获取环境变量配置示例
 
 ### 其他接口
-
-#### 获取模型列表
-
-* 接口地址: `/v1/models`
-* 请求方法: GET
-* 响应格式:
-
-```json
-{
-  "object": "list",
-  "data": [
-    {
-      "id": "string",
-      "object": "model",
-      "created": number,
-      "owned_by": "string"
-    }
-  ]
-}
-```
 
 #### 获取一个随机hash
 
@@ -605,7 +639,8 @@ string
               "tokens": number,
               "max_requests": number,
               "max_tokens": number
-            }
+            },
+            "start_of_month": "string"
           },
           "user": {
             "email": "string",
@@ -673,7 +708,8 @@ string
       "tokens": number,
       "max_requests": number,
       "max_tokens": number
-    }
+    },
+    "start_of_month": "string"
   },
   "user": {
     "email": "string",

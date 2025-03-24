@@ -10,14 +10,14 @@ use crate::{
     common::{model::ApiStatus, utils::extract_token},
 };
 use axum::{
+    Json,
     body::Body,
     extract::State,
     http::{
-        header::{AUTHORIZATION, CONTENT_TYPE},
         HeaderMap, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE},
     },
     response::{IntoResponse, Response},
-    Json,
 };
 use chrono::Local;
 use std::sync::Arc;
@@ -28,17 +28,15 @@ pub async fn handle_logs() -> impl IntoResponse {
     match AppConfig::get_page_content(ROUTE_LOGS_PATH).unwrap_or_default() {
         PageContent::Default => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(Body::from(
-                include_str!("../../../static/logs.min.html").to_string(),
-            ))
+            .body(Body::from(include_str!("../../../static/logs.min.html")))
             .unwrap(),
         PageContent::Text(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-            .body(Body::from(content.clone()))
+            .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(Body::from(content.clone()))
+            .body(Body::from(content))
             .unwrap(),
     }
 }
@@ -62,10 +60,10 @@ pub async fn handle_logs_post(
     if auth_header == auth_token {
         return Ok(Json(LogsResponse {
             status: ApiStatus::Success,
-            total: state.total_requests,
-            active: Some(state.active_requests),
-            error: Some(state.error_requests),
-            logs: state.request_logs.clone(),
+            total: state.request_manager.total_requests,
+            active: Some(state.request_manager.active_requests),
+            error: Some(state.request_manager.error_requests),
+            logs: state.request_manager.request_logs.clone(),
             timestamp: Local::now().to_string(),
         }));
     }
@@ -75,6 +73,7 @@ pub async fn handle_logs_post(
 
     // 否则筛选出token匹配的日志
     let filtered_logs: Vec<RequestLog> = state
+        .request_manager
         .request_logs
         .iter()
         .filter(|log| log.token_info.token == token_part)

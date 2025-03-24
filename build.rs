@@ -116,7 +116,7 @@ fn minify_assets() -> Result<()> {
     let files_to_update: Vec<_> = current_hashes
         .iter()
         .filter(|(path, current_hash)| {
-            let is_readme = path.file_name().map_or(false, |f| f == "README.md");
+            let is_readme = path.file_name().is_some_and(|f| f == "README.md");
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
             // 为 README.md 和其他文件使用不同的输出路径检查
@@ -136,9 +136,7 @@ fn minify_assets() -> Result<()> {
             }
 
             // 检查原始文件是否发生变化
-            saved_hashes
-                .get(*path)
-                .map_or(true, |saved_hash| saved_hash != *current_hash)
+            saved_hashes.get(*path) != Some(*current_hash)
         })
         .map(|(path, _)| path.file_name().unwrap().to_string_lossy().into_owned())
         .collect();
@@ -168,7 +166,7 @@ fn minify_assets() -> Result<()> {
 
 fn main() -> Result<()> {
     // Proto 文件处理
-    println!("cargo:rerun-if-changed=src/chat/aiserver/v1/lite.proto");
+    // println!("cargo:rerun-if-changed=src/chat/aiserver/v1/lite.proto");
     println!("cargo:rerun-if-changed=src/chat/config/key.proto");
     // 获取环境变量 PROTOC
     let protoc_path = match std::env::var_os("PROTOC") {
@@ -185,12 +183,13 @@ fn main() -> Result<()> {
         config.protoc_executable(protoc_path);
     }
     // config.type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]");
-    config
-        .compile_protos(
-            &["src/chat/aiserver/v1/lite.proto"],
-            &["src/chat/aiserver/v1/"],
-        )
-        .unwrap();
+    // config.enum_attribute(".aiserver.v1", "#[allow(clippy::enum_variant_names)]");
+    // config
+    //     .compile_protos(
+    //         &["src/chat/aiserver/v1/lite.proto"],
+    //         &["src/chat/aiserver/v1/"],
+    //     )
+    //     .unwrap();
     config
         .compile_protos(&["src/chat/config/key.proto"], &["src/chat/config/"])
         .unwrap();

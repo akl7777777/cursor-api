@@ -1,30 +1,33 @@
 use crate::{
     app::{
         constant::{
-            AUTHORIZATION_BEARER_PREFIX, CONTENT_TYPE_TEXT_CSS_WITH_UTF8, CONTENT_TYPE_TEXT_HTML_WITH_UTF8, CONTENT_TYPE_TEXT_JS_WITH_UTF8, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8, ROUTE_ABOUT_PATH, ROUTE_BUILD_KEY_PATH, ROUTE_CONFIG_PATH, ROUTE_README_PATH, ROUTE_SHARED_JS_PATH, ROUTE_SHARED_STYLES_PATH
+            AUTHORIZATION_BEARER_PREFIX, CONTENT_TYPE_TEXT_CSS_WITH_UTF8,
+            CONTENT_TYPE_TEXT_HTML_WITH_UTF8, CONTENT_TYPE_TEXT_JS_WITH_UTF8,
+            CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8, ROUTE_ABOUT_PATH, ROUTE_BUILD_KEY_PATH,
+            ROUTE_CONFIG_PATH, ROUTE_README_PATH, ROUTE_SHARED_JS_PATH, ROUTE_SHARED_STYLES_PATH,
         },
         lazy::{AUTH_TOKEN, KEY_PREFIX},
         model::{AppConfig, BuildKeyRequest, BuildKeyResponse, PageContent, UsageCheckModelType},
     },
-    chat::config::{key_config, KeyConfig},
+    chat::config::{KeyConfig, key_config},
     common::utils::{to_base64, token_to_tokeninfo},
 };
 use axum::{
+    Json,
     body::Body,
     extract::Path,
     http::{
-        header::{AUTHORIZATION, CONTENT_TYPE, LOCATION},
         HeaderMap, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE, LOCATION},
     },
     response::{IntoResponse, Response},
-    Json,
 };
 use prost::Message as _;
 
 pub async fn handle_env_example() -> impl IntoResponse {
     Response::builder()
         .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-        .body(include_str!("../../../.env.example").to_string())
+        .body(Body::from(include_str!("../../../.env.example")))
         .unwrap()
 }
 
@@ -33,15 +36,15 @@ pub async fn handle_config_page() -> impl IntoResponse {
     match AppConfig::get_page_content(ROUTE_CONFIG_PATH).unwrap_or_default() {
         PageContent::Default => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(include_str!("../../../static/config.min.html").to_string())
+            .body(Body::from(include_str!("../../../static/config.min.html")))
             .unwrap(),
         PageContent::Text(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-            .body(content.clone())
+            .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(content.clone())
+            .body(Body::from(content))
             .unwrap(),
     }
 }
@@ -52,11 +55,13 @@ pub async fn handle_static(Path(path): Path<String>) -> impl IntoResponse {
             match AppConfig::get_page_content(ROUTE_SHARED_STYLES_PATH).unwrap_or_default() {
                 PageContent::Default => Response::builder()
                     .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_CSS_WITH_UTF8)
-                    .body(include_str!("../../../static/shared-styles.min.css").to_string())
+                    .body(Body::from(include_str!(
+                        "../../../static/shared-styles.min.css"
+                    )))
                     .unwrap(),
                 PageContent::Text(content) | PageContent::Html(content) => Response::builder()
                     .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_CSS_WITH_UTF8)
-                    .body(content.clone())
+                    .body(Body::from(content))
                     .unwrap(),
             }
         }
@@ -64,17 +69,19 @@ pub async fn handle_static(Path(path): Path<String>) -> impl IntoResponse {
             match AppConfig::get_page_content(ROUTE_SHARED_JS_PATH).unwrap_or_default() {
                 PageContent::Default => Response::builder()
                     .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_JS_WITH_UTF8)
-                    .body(include_str!("../../../static/shared.min.js").to_string())
+                    .body(Body::from(
+                        include_str!("../../../static/shared.min.js").to_string(),
+                    ))
                     .unwrap(),
                 PageContent::Text(content) | PageContent::Html(content) => Response::builder()
                     .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_JS_WITH_UTF8)
-                    .body(content.clone())
+                    .body(Body::from(content))
                     .unwrap(),
             }
         }
         _ => Response::builder()
             .status(StatusCode::NOT_FOUND)
-            .body("Not found".to_string())
+            .body(Body::from("Not found"))
             .unwrap(),
     }
 }
@@ -83,15 +90,15 @@ pub async fn handle_readme() -> impl IntoResponse {
     match AppConfig::get_page_content(ROUTE_README_PATH).unwrap_or_default() {
         PageContent::Default => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(include_str!("../../../static/readme.min.html").to_string())
+            .body(Body::from(include_str!("../../../static/readme.min.html")))
             .unwrap(),
         PageContent::Text(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-            .body(content.clone())
+            .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(content.clone())
+            .body(Body::from(content))
             .unwrap(),
     }
 }
@@ -105,11 +112,11 @@ pub async fn handle_about() -> impl IntoResponse {
             .unwrap(),
         PageContent::Text(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-            .body(Body::from(content.clone()))
+            .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(Body::from(content.clone()))
+            .body(Body::from(content))
             .unwrap(),
     }
 }
@@ -118,15 +125,17 @@ pub async fn handle_build_key_page() -> impl IntoResponse {
     match AppConfig::get_page_content(ROUTE_BUILD_KEY_PATH).unwrap_or_default() {
         PageContent::Default => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(include_str!("../../../static/build_key.min.html").to_string())
+            .body(Body::from(include_str!(
+                "../../../static/build_key.min.html"
+            )))
             .unwrap(),
         PageContent::Text(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_PLAIN_WITH_UTF8)
-            .body(content.clone())
+            .body(Body::from(content))
             .unwrap(),
         PageContent::Html(content) => Response::builder()
             .header(CONTENT_TYPE, CONTENT_TYPE_TEXT_HTML_WITH_UTF8)
-            .body(content.clone())
+            .body(Body::from(content))
             .unwrap(),
     }
 }
@@ -142,7 +151,9 @@ pub async fn handle_build_key(
             .and_then(|h| h.to_str().ok())
             .and_then(|h| h.strip_prefix(AUTHORIZATION_BEARER_PREFIX));
 
-        if auth_header.map_or(true, |h| h != AppConfig::get_share_token().as_str() && h != AUTH_TOKEN.as_str()) {
+        if auth_header
+            .is_none_or(|h| h != AppConfig::get_share_token().as_str() && h != AUTH_TOKEN.as_str())
+        {
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(BuildKeyResponse::Error("Unauthorized".to_owned())),
@@ -157,7 +168,7 @@ pub async fn handle_build_key(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(BuildKeyResponse::Error("Invalid auth token".to_owned())),
-            )
+            );
         }
     };
 
@@ -173,9 +184,7 @@ pub async fn handle_build_key(
     if let Some(usage_check_models) = request.usage_check_models {
         let usage_check = key_config::UsageCheckModel {
             r#type: match usage_check_models.model_type {
-                UsageCheckModelType::Default => {
-                    key_config::usage_check_model::Type::Default as i32
-                }
+                UsageCheckModelType::Default => key_config::usage_check_model::Type::Default as i32,
                 UsageCheckModelType::Disabled => {
                     key_config::usage_check_model::Type::Disabled as i32
                 }

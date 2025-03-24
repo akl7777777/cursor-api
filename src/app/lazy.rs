@@ -1,10 +1,9 @@
-use super::constant::{
-    COMMA, CURSOR_API2_HOST, CURSOR_HOST, DEFAULT_TOKEN_LIST_FILE_NAME, EMPTY_STRING,
-};
+use super::constant::{COMMA, CURSOR_API2_HOST, CURSOR_HOST, EMPTY_STRING};
 use crate::common::utils::{
     parse_ascii_char_from_env, parse_bool_from_env, parse_string_from_env, parse_usize_from_env,
 };
-use std::sync::LazyLock;
+use chrono::Local;
+use std::{path::PathBuf, sync::LazyLock};
 use tokio::sync::{Mutex, OnceCell};
 
 macro_rules! def_pub_static {
@@ -32,17 +31,15 @@ macro_rules! def_pub_static {
 
 def_pub_static!(ROUTE_PREFIX, env: "ROUTE_PREFIX", default: EMPTY_STRING);
 def_pub_static!(AUTH_TOKEN, env: "AUTH_TOKEN", default: EMPTY_STRING);
-def_pub_static!(TOKEN_LIST_FILE, env: "TOKEN_LIST_FILE", default: DEFAULT_TOKEN_LIST_FILE_NAME);
 def_pub_static!(ROUTE_MODELS_PATH, format!("{}/v1/models", *ROUTE_PREFIX));
 def_pub_static!(
     ROUTE_CHAT_PATH,
     format!("{}/v1/chat/completions", *ROUTE_PREFIX)
 );
 
-pub static START_TIME: LazyLock<chrono::DateTime<chrono::Local>> =
-    LazyLock::new(chrono::Local::now);
+pub static START_TIME: LazyLock<chrono::DateTime<Local>> = LazyLock::new(Local::now);
 
-pub fn get_start_time() -> chrono::DateTime<chrono::Local> {
+pub fn get_start_time() -> chrono::DateTime<Local> {
     *START_TIME
 }
 
@@ -115,6 +112,12 @@ def_cursor_api_url!(
 );
 
 def_cursor_api_url!(
+    CURSOR_API2_CHAT_MODELS_URL,
+    CURSOR_API2_HOST,
+    "/aiserver.v1.AiService/AvailableModels"
+);
+
+def_cursor_api_url!(
     CURSOR_API2_STRIPE_URL,
     CURSOR_API2_HOST,
     "/auth/full_stripe_profile"
@@ -124,11 +127,26 @@ def_cursor_api_url!(CURSOR_USAGE_API_URL, CURSOR_HOST, "/api/usage");
 
 def_cursor_api_url!(CURSOR_USER_API_URL, CURSOR_HOST, "/api/auth/me");
 
-pub(super) static LOGS_FILE_PATH: LazyLock<String> =
-    LazyLock::new(|| parse_string_from_env("LOGS_FILE_PATH", "logs.bin"));
+static DATA_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    let data_dir = parse_string_from_env("DATA_DIR", "data");
+    let path = std::env::current_exe()
+        .ok()
+        .and_then(|exe_path| exe_path.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(data_dir);
+    if !path.exists() {
+        std::fs::create_dir_all(&path).expect("无法创建数据目录");
+    }
+    path
+});
 
-pub(super) static PAGES_FILE_PATH: LazyLock<String> =
-    LazyLock::new(|| parse_string_from_env("PAGES_FILE_PATH", "pages.bin"));
+pub(super) static CONFIG_FILE_PATH: LazyLock<PathBuf> =
+    LazyLock::new(|| DATA_DIR.join("config.bin"));
+
+pub(super) static LOGS_FILE_PATH: LazyLock<PathBuf> = LazyLock::new(|| DATA_DIR.join("logs.bin"));
+
+pub(super) static TOKENS_FILE_PATH: LazyLock<PathBuf> =
+    LazyLock::new(|| DATA_DIR.join("tokens.bin"));
 
 pub static DEBUG: LazyLock<bool> = LazyLock::new(|| parse_bool_from_env("DEBUG", false));
 
@@ -157,14 +175,14 @@ pub(crate) async fn get_log_file() -> &'static Mutex<tokio::fs::File> {
 #[macro_export]
 macro_rules! debug_println {
     ($($arg:tt)*) => {
-        if *crate::app::lazy::DEBUG {
+        if *$crate::app::lazy::DEBUG {
             let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
             let log_message = format!("{} - {}", time, format!($($arg)*));
             use tokio::io::AsyncWriteExt as _;
 
             // 使用 tokio 的 spawn 在后台异步写入日志
             tokio::spawn(async move {
-                let log_file = crate::app::lazy::get_log_file().await;
+                let log_file = $crate::app::lazy::get_log_file().await;
                 // 使用 MutexGuard 获取可变引用
                 let mut file = log_file.lock().await;
                 if let Err(err) = file.write_all(log_message.as_bytes()).await {
@@ -182,6 +200,8 @@ macro_rules! debug_println {
 
 pub static REQUEST_LOGS_LIMIT: LazyLock<usize> =
     LazyLock::new(|| std::cmp::min(parse_usize_from_env("REQUEST_LOGS_LIMIT", 100), 2000));
+
+pub static IS_UNLIMITED_REQUEST_LOGS: LazyLock<bool> = LazyLock::new(|| *REQUEST_LOGS_LIMIT == 0);
 
 pub static SERVICE_TIMEOUT: LazyLock<u64> = LazyLock::new(|| {
     let timeout = parse_usize_from_env("SERVICE_TIMEOUT", 30);
